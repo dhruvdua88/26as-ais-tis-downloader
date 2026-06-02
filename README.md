@@ -15,7 +15,6 @@
 - 🔓 **Auto PDF unlock** — strips IT department passwords automatically (no manual entry)
 - 📁 **Per-assessee folders** — each client's files go into their own folder in Downloads
 - 🗜 **ZIP mode** — optionally package all 3 files into a single ZIP
-- 📊 **CompuOffice import** — bulk-import client master from CompuOffice Excel export
 - 🔄 **Dual-login handling** — automatically handles "already logged in" prompt
 - 🖥 **Single portable .exe** — no installation required; share with colleagues
 
@@ -64,16 +63,6 @@ PDF passwords used by the IT department:
 npm run dist
 # Output: dist-installer\26AS-AIS-TIS-Downloader-1.0.0-portable.exe
 ```
-
----
-
-## CompuOffice Integration
-
-1. In CompuOffice → **Client Master** → filter by FY 2024-25 → **Export to Excel**
-2. In this app → click **⬆ Import from CompuOffice** → select the Excel file
-3. Preview the detected columns, then click **Import**
-
-Columns auto-detected: Client Name, PAN No, Date of Birth, IT Password.
 
 ---
 
