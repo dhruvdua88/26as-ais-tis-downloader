@@ -103,23 +103,30 @@ function createMainWindow() {
 
 app.whenReady().then(() => {
   const splash = createSplash();
-  const win    = createMainWindow();
 
-  // When the splash signals it's done, close splash → show main.
-  const { ipcMain: _ipc } = require('electron');
-  _ipc.once('splash:done', () => {
-    splash.close();
-    win.show();
-    win.focus();
-  });
+  // Create main window but keep it hidden — no reference to win in outer
+  // scope yet so we can't accidentally call win.show() early.
+  let win = null;
 
-  // Safety fallback — show main after 4s even if splash IPC never fires.
-  setTimeout(() => {
-    if (!win.isDestroyed() && !win.isVisible()) {
-      splash.destroy();
+  function showMain() {
+    if (win && !win.isDestroyed() && !win.isVisible()) {
+      if (!splash.isDestroyed()) splash.destroy();
       win.show();
+      win.focus();
     }
-  }, 4000);
+  }
+
+  // Give Electron a tick to paint the splash before creating the heavier
+  // main window (avoids the main window stealing focus immediately).
+  setTimeout(() => {
+    win = createMainWindow();
+
+    // IPC signal from splash animation end.
+    ipcMain.once('splash:done', showMain);
+
+    // Hard fallback: show main after 4 s even if splash IPC never fires.
+    setTimeout(showMain, 4000);
+  }, 50);
 
   ipcMain.handle('assessees:list', () => loadAssessees());
 
