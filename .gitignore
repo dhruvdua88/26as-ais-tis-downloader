@@ -1,0 +1,12 @@
+node_modules/
+data/assessees.json
+*.log
+.DS_Store
+
+# qpdf binaries dropped into vendor/qpdf/bin (keep README, ignore the rest)
+vendor/qpdf/bin/*
+!vendor/qpdf/bin/README.txt
+
+# electron-builder output
+dist-installer/
+build/

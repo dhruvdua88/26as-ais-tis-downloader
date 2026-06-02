@@ -1,0 +1,66 @@
+{
+  "name": "26as-ais-tis-downloader",
+  "version": "1.0.0",
+  "description": "One-click 26AS, AIS and TIS downloader from the Indian Income Tax e-Filing portal. Built for Indian CA firms.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "postinstall": "playwright install chromium",
+    "dist:prep": "node scripts/prebuild.js",
+    "dist": "npm run dist:prep && electron-builder --win portable --x64"
+  },
+  "author": {
+    "name": "CA Akshay Daiya",
+    "email": "akshaybkn@gmail.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/akshaybkn/26as-ais-tis-downloader"
+  },
+  "keywords": ["income-tax", "26AS", "AIS", "TIS", "TRACES", "India", "CA", "ITR", "electron"],
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "playwright": "^1.47.0",
+    "xlsx": "^0.18.5"
+  },
+  "build": {
+    "appId": "com.akshaydaiya.26as-ais-tis-downloader",
+    "productName": "26AS AIS TIS Downloader",
+    "asar": false,
+    "directories": {
+      "output": "dist-installer",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "automation/**/*",
+      "vendor/**/*",
+      "node_modules/**/*",
+      "!data/**/*",
+      "!dist-installer/**/*",
+      "!.tmp.driveupload/**/*",
+      "!**/*.md",
+      "!vendor/qpdf/bin/README.txt"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "26AS-AIS-TIS-Downloader-${version}-portable.exe"
+    },
+    "portable": {
+      "artifactName": "26AS-AIS-TIS-Downloader-${version}-portable.exe"
+    }
+  }
+}

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>26AS AIS TIS Downloader</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>26AS / AIS / TIS Downloader</h1>
+    <p class="sub">One-click downloads from the Indian Income Tax e-Filing portal</p>
+  </header>
+
+  <main>
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Assessees</h2>
+        <div style="display:flex;gap:8px">
+          <button id="btn-import" class="accent">⬆ Import from CompuOffice</button>
+          <button id="btn-add" class="primary">+ Add Assessee</button>
+        </div>
+      </div>
+      <table id="assessee-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>PAN</th>
+            <th>DOB</th>
+            <th>Password</th>
+            <th class="actions-col">Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <p id="empty-hint" class="hint" hidden>No assessees yet. Click <b>+ Add Assessee</b> to add one.</p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Activity Log</h2>
+        <button id="btn-clear-log" class="ghost">Clear</button>
+      </div>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <!-- Add / Edit modal -->
+  <div id="modal" class="modal-backdrop" hidden>
+    <div class="modal">
+      <h3 id="modal-title">Add Assessee</h3>
+      <label>Name<input id="f-name" type="text" placeholder="e.g. ABC Pvt Ltd" /></label>
+      <label>PAN<input id="f-pan" type="text" maxlength="10" placeholder="ABCDE1234F" /></label>
+      <label>DOB <small style="color:#94a3b8">(DDMMYYYY — used to unlock downloaded PDFs)</small><input id="f-dob" type="text" maxlength="10" placeholder="01011990 or 01/01/1990" /></label>
+      <label>Password<input id="f-password" type="text" placeholder="IT portal password" /></label>
+      <div class="modal-actions">
+        <button id="m-cancel" class="ghost">Cancel</button>
+        <button id="m-save" class="primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Download choice modal -->
+  <div id="dl-modal" class="modal-backdrop" hidden>
+    <div class="modal">
+      <h3>Download for <span id="dl-name"></span></h3>
+      <label class="check"><input type="checkbox" id="opt-26as" checked /> Form 26AS</label>
+      <label class="check"><input type="checkbox" id="opt-ais" checked /> AIS (Annual Information Statement)</label>
+      <label class="check"><input type="checkbox" id="opt-tis" checked /> TIS (Taxpayer Information Summary)</label>
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:14px 0 10px" />
+      <div class="modal-actions">
+        <button id="dl-cancel" class="ghost">Cancel</button>
+        <button id="dl-go" class="primary">Download</button>
+        <button id="dl-zip" class="accent">Download &amp; ZIP</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="credit">
+      Developed by <b>CA Akshay Daiya</b>
+      &nbsp;•&nbsp; Mobile <a href="tel:+919929089598">+91 99290 89598</a>
+      &nbsp;•&nbsp; <a href="mailto:akshaybkn@gmail.com">akshaybkn@gmail.com</a>
+    </div>
+  </footer>
+
+  <!-- CompuOffice Import modal -->
+  <div id="import-modal" class="modal-backdrop" hidden>
+    <div class="modal" style="width:520px;max-width:96vw">
+      <h3>Import from CompuOffice Excel</h3>
+      <div id="import-step-pick">
+        <p style="font-size:13px;color:#475569;margin:0 0 14px">
+          In CompuOffice → Client Master → Export to Excel (filter by FY 2024-25 ITR filed).
+          Then select that file below.
+        </p>
+        <button id="import-pick-file" class="primary" style="width:100%">Select Excel / CSV file…</button>
+        <p id="import-file-name" style="font-size:12px;color:#64748b;margin:8px 0 0;text-align:center"></p>
+      </div>
+      <div id="import-step-preview" hidden>
+        <p id="import-summary" style="font-size:13px;color:#1f2937;margin:0 0 10px"></p>
+        <div style="font-size:12px;color:#475569;margin-bottom:8px">
+          <b>Column mapping detected:</b>
+          <span id="import-col-map"></span>
+        </div>
+        <div style="max-height:200px;overflow:auto;border:1px solid #e5e7eb;border-radius:6px">
+          <table id="import-preview-table" style="width:100%;font-size:12px;border-collapse:collapse">
+            <thead>
+              <tr style="background:#f8fafc">
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb">Name</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb">PAN</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb">DOB</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb">Password</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <label class="check" style="margin-top:12px;font-size:13px">
+          <input type="checkbox" id="import-overwrite" />
+          Overwrite existing assessees with same PAN
+        </label>
+      </div>
+      <div class="modal-actions" style="margin-top:16px">
+        <button id="import-cancel" class="ghost">Cancel</button>
+        <button id="import-pick-file2" class="ghost" hidden>← Choose another file</button>
+        <button id="import-confirm" class="accent" hidden>Import</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
