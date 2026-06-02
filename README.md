@@ -28,6 +28,20 @@
 
 ---
 
+## Installation
+
+Download the latest installer from the [Releases](https://github.com/DaiyaAkshay/26as-ais-tis-downloader/releases/latest) page:
+
+👉 **`26AS-AIS-TIS-Downloader-Setup-1.0.0.exe`**
+
+1. Double-click the installer
+2. Follow the setup wizard (choose install folder, create desktop shortcut)
+3. Launch from the Start Menu or Desktop shortcut
+
+> **Requirements:** Windows 10 / 11 (64-bit) · Google Chrome installed · Active internet connection
+
+---
+
 ## Quick Start (development)
 
 ```bash
@@ -57,11 +71,11 @@ PDF passwords used by the IT department:
 
 ---
 
-## Build portable .exe
+## Build installer
 
 ```bash
 npm run dist
-# Output: dist-installer\26AS-AIS-TIS-Downloader-1.0.0-portable.exe
+# Output: dist-installer\26AS-AIS-TIS-Downloader-Setup-1.0.0.exe
 ```
 
 ---

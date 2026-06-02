@@ -7,7 +7,7 @@
     "start": "electron .",
     "postinstall": "playwright install chromium",
     "dist:prep": "node scripts/prebuild.js",
-    "dist": "npm run dist:prep && electron-builder --win portable --x64"
+    "dist": "npm run dist:prep && electron-builder --win nsis --x64"
   },
   "author": {
     "name": "CA Akshay Daiya",
@@ -64,16 +64,23 @@
     "win": {
       "target": [
         {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
+          "target": "nsis",
+          "arch": ["x64"]
         }
       ],
-      "artifactName": "26AS-AIS-TIS-Downloader-${version}-portable.exe"
+      "icon": "assets/icon.ico"
     },
-    "portable": {
-      "artifactName": "26AS-AIS-TIS-Downloader-${version}-portable.exe"
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "26AS AIS TIS Downloader",
+      "artifactName": "26AS-AIS-TIS-Downloader-Setup-${version}.exe",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
+      "deleteAppDataOnUninstall": false
     }
   }
 }
