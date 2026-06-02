@@ -8,7 +8,6 @@ const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
-const XLSX = require('xlsx');
 const { downloadAll } = require('./automation/downloader');
 
 // Store assessees.json under %APPDATA% when packaged (resources/app is read-
@@ -38,54 +37,6 @@ function saveAssessees(list) {
   fs.writeFileSync(ASSESSEES_FILE, JSON.stringify(list, null, 2), 'utf8');
 }
 
-/**
- * Parse a CompuOffice Excel/CSV export and return an array of
- * { name, pan, dob, password, _row } objects. Auto-detects columns by
- * matching against common CompuOffice header names.
- */
-function parseCompuOfficeExcel(filePath) {
-  const workbook = XLSX.readFile(filePath, { cellDates: true, raw: false });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-  if (!rows.length) throw new Error('No data found in the Excel file.');
-
-  // Column name aliases — CompuOffice uses various header labels.
-  const ALIASES = {
-    name: ['client name', 'assessee name', 'name of assessee', 'name', 'assessee', 'client'],
-    pan:  ['pan no', 'pan number', 'pan', 'permanent account number', 'pan no.'],
-    dob:  ['date of birth', 'dob', 'd.o.b', 'date of birth / doi', 'doi', 'date of incorporation', 'birth date'],
-    password: ['it password', 'income tax password', 'efiling password', 'e-filing password', 'portal password', 'password', 'login password'],
-  };
-
-  // Match actual column headers to our fields.
-  const headers = Object.keys(rows[0]);
-  const colMap = {};
-  for (const [field, aliases] of Object.entries(ALIASES)) {
-    const match = headers.find(h =>
-      aliases.some(a => a.toLowerCase() === h.toLowerCase().trim())
-    );
-    if (match) colMap[field] = match;
-  }
-
-  // Fallback: fuzzy partial match if no exact hit.
-  for (const [field, aliases] of Object.entries(ALIASES)) {
-    if (colMap[field]) continue;
-    const match = headers.find(h =>
-      aliases.some(a => h.toLowerCase().includes(a.toLowerCase()))
-    );
-    if (match) colMap[field] = match;
-  }
-
-  const parsed = rows.map((row, i) => ({
-    _row: i + 2, // 1-based row number (1 = header)
-    name:     String(row[colMap.name]     || '').trim(),
-    pan:      String(row[colMap.pan]      || '').trim().toUpperCase(),
-    dob:      String(row[colMap.dob]      || '').trim(),
-    password: String(row[colMap.password] || '').trim(),
-  })).filter(r => /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(r.pan)); // valid PANs only
-
-  return { colMap, totalRows: rows.length, validRows: parsed.length, rows: parsed };
-}
 
 /**
  * Accept DOB as DDMMYYYY, DD-MM-YYYY, DD/MM/YYYY or YYYY-MM-DD.
@@ -231,49 +182,6 @@ app.whenReady().then(() => {
   }
 
   ipcMain.handle('shell:openPath', (_e, p) => shell.openPath(p));
-
-  // ── CompuOffice Excel Import ─────────────────────────────────────────────
-  ipcMain.handle('compuoffice:pick', async () => {
-    const result = await dialog.showOpenDialog(win, {
-      title: 'Select CompuOffice Excel Export',
-      filters: [{ name: 'Excel / CSV', extensions: ['xlsx', 'xls', 'csv'] }],
-      properties: ['openFile'],
-    });
-    return result.canceled ? null : result.filePaths[0];
-  });
-
-  ipcMain.handle('compuoffice:preview', (_e, filePath) => {
-    return parseCompuOfficeExcel(filePath);
-  });
-
-  ipcMain.handle('compuoffice:import', (_e, rows) => {
-    // rows = array of { name, pan, dob, password } already validated by renderer
-    const list = loadAssessees();
-    const added = [], skipped = [], updated = [];
-
-    for (const r of rows) {
-      const pan = String(r.pan || '').toUpperCase().trim();
-      if (!pan) continue;
-      const existing = list.findIndex(x => x.pan === pan);
-      const entry = {
-        name: String(r.name || '').trim(),
-        pan,
-        password: String(r.password || ''),
-        dob: normalizeDob(r.dob),
-      };
-      if (existing === -1) {
-        list.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ...entry });
-        added.push(pan);
-      } else if (r.overwrite) {
-        list[existing] = { ...list[existing], ...entry };
-        updated.push(pan);
-      } else {
-        skipped.push(pan);
-      }
-    }
-    saveAssessees(list);
-    return { list, added, skipped, updated };
-  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

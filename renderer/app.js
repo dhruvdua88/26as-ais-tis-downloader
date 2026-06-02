@@ -153,11 +153,6 @@ document.addEventListener('click', async (e) => {
   else if (t.id === 'dl-zip') startDownload(true);
   // Log
   else if (t.id === 'btn-clear-log') { logEl.textContent = ''; }
-  // CompuOffice import
-  else if (t.id === 'btn-import') openImportModal();
-  else if (t.id === 'import-cancel') closeImportModal();
-  else if (t.id === 'import-pick-file' || t.id === 'import-pick-file2') await pickAndPreviewFile();
-  else if (t.id === 'import-confirm') await confirmImport();
   // Row actions
   else if (t.dataset.act) {
     const id = t.dataset.id;
@@ -176,88 +171,5 @@ document.addEventListener('click', async (e) => {
 });
 
 window.api.onLog(({ msg }) => logLine(msg));
-
-// ── CompuOffice Import ────────────────────────────────────────────────────
-let importRows = [];
-
-function openImportModal() {
-  importRows = [];
-  $('#import-step-pick').hidden = false;
-  $('#import-step-preview').hidden = true;
-  $('#import-file-name').textContent = '';
-  $('#import-confirm').hidden = true;
-  $('#import-pick-file2').hidden = true;
-  $('#import-modal').hidden = false;
-}
-
-function closeImportModal() {
-  $('#import-modal').hidden = true;
-  importRows = [];
-}
-
-async function pickAndPreviewFile() {
-  const filePath = await window.api.compuPick();
-  if (!filePath) return;
-  $('#import-file-name').textContent = filePath.split(/[\\/]/).pop();
-  try {
-    const result = await window.api.compuPreview(filePath);
-    importRows = result.rows;
-
-    // Summary
-    const colNames = Object.entries(result.colMap)
-      .map(([f, c]) => `${f}→"${c}"`).join(', ');
-    $('#import-col-map').textContent = ' ' + (colNames || 'none detected');
-    $('#import-summary').textContent =
-      `${result.validRows} valid assessees found (out of ${result.totalRows} rows). ` +
-      (result.validRows < result.totalRows
-        ? `${result.totalRows - result.validRows} rows skipped (invalid/missing PAN).`
-        : '');
-
-    // Preview table
-    const tbody = $('#import-preview-table tbody');
-    tbody.innerHTML = '';
-    for (const r of importRows.slice(0, 50)) {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td style="padding:5px 8px;border-bottom:1px solid #f1f5f9">${escapeHtml(r.name) || '<i style="color:#94a3b8">—</i>'}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid #f1f5f9;font-family:monospace">${escapeHtml(r.pan)}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid #f1f5f9">${escapeHtml(r.dob) || '<i style="color:#94a3b8">—</i>'}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid #f1f5f9">${r.password ? '••••••' : '<i style="color:#94a3b8">—</i>'}</td>
-      `;
-      tbody.appendChild(tr);
-    }
-    if (importRows.length > 50) {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td colspan="4" style="padding:6px 8px;color:#64748b;font-size:12px">… and ${importRows.length - 50} more</td>`;
-      tbody.appendChild(tr);
-    }
-
-    $('#import-step-pick').hidden = true;
-    $('#import-step-preview').hidden = false;
-    $('#import-confirm').hidden = false;
-    $('#import-pick-file2').hidden = false;
-  } catch (e) {
-    alert('Failed to read file: ' + (e.message || e));
-  }
-}
-
-async function confirmImport() {
-  if (!importRows.length) return;
-  const overwrite = $('#import-overwrite').checked;
-  const rows = importRows.map(r => ({ ...r, overwrite }));
-  try {
-    const result = await window.api.compuImport(rows);
-    closeImportModal();
-    refresh();
-    alert(
-      `Import complete!\n\n` +
-      `✅ Added: ${result.added.length}\n` +
-      `🔄 Updated: ${result.updated.length}\n` +
-      `⏭ Skipped (already exist): ${result.skipped.length}`
-    );
-  } catch (e) {
-    alert('Import failed: ' + (e.message || e));
-  }
-}
 
 refresh();

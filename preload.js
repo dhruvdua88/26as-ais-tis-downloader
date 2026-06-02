@@ -8,8 +8,4 @@ contextBridge.exposeInMainWorld('api', {
   download: (payload) => ipcRenderer.invoke('download:run', payload),
   openPath: (p) => ipcRenderer.invoke('shell:openPath', p),
   onLog: (cb) => ipcRenderer.on('download:log', (_e, data) => cb(data)),
-  // CompuOffice import
-  compuPick:    ()           => ipcRenderer.invoke('compuoffice:pick'),
-  compuPreview: (filePath)   => ipcRenderer.invoke('compuoffice:preview', filePath),
-  compuImport:  (rows)       => ipcRenderer.invoke('compuoffice:import', rows),
 });
