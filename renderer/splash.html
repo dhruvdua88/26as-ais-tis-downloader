@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Loading…</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 480px; height: 320px;
+      background: #0f172a;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+
+    /* Radial glow behind icon */
+    .glow {
+      position: absolute;
+      width: 300px; height: 300px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(30,64,175,0.4) 0%, transparent 70%);
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      animation: pulse-glow 2s ease-in-out infinite;
+    }
+    @keyframes pulse-glow {
+      0%, 100% { transform: translate(-50%,-50%) scale(1);   opacity: 0.7; }
+      50%       { transform: translate(-50%,-50%) scale(1.15); opacity: 1;   }
+    }
+
+    /* Icon */
+    .icon-wrap {
+      position: relative; z-index: 2;
+      width: 100px; height: 100px;
+      border-radius: 22px;
+      background: linear-gradient(145deg, #1e40af, #1e3a8a);
+      box-shadow: 0 12px 40px rgba(30,58,138,0.6), 0 0 0 1px rgba(255,255,255,0.08);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 3px;
+      animation: icon-in 0.6s cubic-bezier(0.34,1.56,0.64,1) forwards;
+      opacity: 0;
+    }
+    @keyframes icon-in {
+      from { opacity: 0; transform: scale(0.5) translateY(20px); }
+      to   { opacity: 1; transform: scale(1)   translateY(0);    }
+    }
+
+    /* Document inside icon */
+    .doc {
+      width: 34px; height: 42px;
+      background: #fff;
+      border-radius: 3px 8px 3px 3px;
+      position: relative;
+    }
+    .doc::before {
+      content: '';
+      position: absolute; top: 0; right: 0;
+      width: 10px; height: 10px;
+      background: #93c5fd;
+      clip-path: polygon(0 0, 100% 100%, 100% 0);
+      border-radius: 0 8px 0 0;
+    }
+    .dl { position: absolute; left: 5px; height: 2px; border-radius: 1px; background: #bfdbfe; }
+    .dl1 { top: 14px; width: 22px; }
+    .dl2 { top: 19px; width: 17px; }
+    .dl3 { top: 24px; width: 20px; }
+    .dl4 { top: 29px; width: 13px; }
+    .arrow-badge {
+      position: absolute; bottom: -5px; right: -5px;
+      width: 14px; height: 14px;
+      background: #f59e0b;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .arrow-badge::after {
+      content: '';
+      width: 0; height: 0;
+      border-left: 3px solid transparent;
+      border-right: 3px solid transparent;
+      border-top: 5px solid #fff;
+      margin-top: 2px;
+    }
+
+    .icon-text {
+      font-size: 11px; font-weight: 800;
+      color: #fff; letter-spacing: 1px;
+    }
+
+    /* App title */
+    .title-wrap {
+      position: relative; z-index: 2;
+      margin-top: 20px;
+      text-align: center;
+      animation: fade-up 0.5s ease forwards;
+      animation-delay: 0.5s;
+      opacity: 0;
+    }
+    @keyframes fade-up {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0);    }
+    }
+    .title {
+      font-size: 26px; font-weight: 800;
+      color: #fff;
+      letter-spacing: 1px;
+    }
+    .title span { color: #60a5fa; }
+    .subtitle {
+      font-size: 11px;
+      color: #64748b;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    /* Progress bar */
+    .progress-track {
+      position: relative; z-index: 2;
+      margin-top: 28px;
+      width: 200px; height: 3px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 2px;
+      overflow: hidden;
+      animation: fade-up 0.4s ease forwards;
+      animation-delay: 0.7s;
+      opacity: 0;
+    }
+    .progress-bar {
+      height: 100%; width: 0;
+      background: linear-gradient(90deg, #1e40af, #60a5fa);
+      border-radius: 2px;
+      animation: fill-bar 1.6s cubic-bezier(0.4,0,0.2,1) forwards;
+      animation-delay: 0.8s;
+    }
+    @keyframes fill-bar {
+      0%   { width: 0;    }
+      60%  { width: 70%;  }
+      85%  { width: 88%;  }
+      100% { width: 100%; }
+    }
+
+    /* Credit */
+    .credit {
+      position: absolute;
+      bottom: 14px;
+      font-size: 10px;
+      color: #334155;
+      letter-spacing: 0.5px;
+      animation: fade-up 0.4s ease forwards;
+      animation-delay: 0.9s;
+      opacity: 0;
+    }
+
+    /* Fade-out overlay */
+    .fadeout {
+      position: fixed; inset: 0;
+      background: #0f172a;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.35s ease;
+      z-index: 99;
+    }
+    .fadeout.active { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="glow"></div>
+
+  <div class="icon-wrap">
+    <div class="doc">
+      <div class="dl dl1"></div>
+      <div class="dl dl2"></div>
+      <div class="dl dl3"></div>
+      <div class="dl dl4"></div>
+      <div class="arrow-badge"></div>
+    </div>
+    <div class="icon-text">26AS</div>
+  </div>
+
+  <div class="title-wrap">
+    <div class="title">26AS / <span>AIS</span> / TIS</div>
+    <div class="subtitle">Income Tax Downloader</div>
+  </div>
+
+  <div class="progress-track">
+    <div class="progress-bar"></div>
+  </div>
+
+  <div class="credit">Developed by CA Akshay Daiya &nbsp;·&nbsp; M/s Daiya Tiwari &amp; Soni</div>
+
+  <div class="fadeout" id="fadeout"></div>
+
+  <script>
+    // ── Startup chime (Web Audio API — no audio file needed) ──────────────
+    function playChime() {
+      try {
+        const ctx = new AudioContext();
+        // Three ascending notes: C5 → E5 → G5
+        const notes = [523.25, 659.25, 783.99];
+        notes.forEach((freq, i) => {
+          const osc  = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          const t = ctx.currentTime + i * 0.18;
+          gain.gain.setValueAtTime(0, t);
+          gain.gain.linearRampToValueAtTime(0.18, t + 0.04);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+          osc.start(t);
+          osc.stop(t + 0.65);
+        });
+      } catch (e) { /* audio blocked — silent */ }
+    }
+    playChime();
+
+    // ── Close splash and show main window after animation completes ───────
+    setTimeout(() => {
+      document.getElementById('fadeout').classList.add('active');
+      setTimeout(() => {
+        if (window.splashAPI) window.splashAPI.done();
+      }, 360);
+    }, 2400);
+  </script>
+</body>
+</html>

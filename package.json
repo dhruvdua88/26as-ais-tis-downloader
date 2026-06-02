@@ -18,10 +18,21 @@
     "type": "git",
     "url": "https://github.com/akshaybkn/26as-ais-tis-downloader"
   },
-  "keywords": ["income-tax", "26AS", "AIS", "TIS", "TRACES", "India", "CA", "ITR", "electron"],
+  "keywords": [
+    "income-tax",
+    "26AS",
+    "AIS",
+    "TIS",
+    "TRACES",
+    "India",
+    "CA",
+    "ITR",
+    "electron"
+  ],
   "devDependencies": {
     "electron": "^32.0.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "png-to-ico": "^3.0.1"
   },
   "dependencies": {
     "playwright": "^1.47.0"
@@ -29,6 +40,7 @@
   "build": {
     "appId": "com.akshaydaiya.26as-ais-tis-downloader",
     "productName": "26AS AIS TIS Downloader",
+    "icon": "assets/icon.ico",
     "asar": false,
     "directories": {
       "output": "dist-installer",
@@ -37,9 +49,11 @@
     "files": [
       "main.js",
       "preload.js",
+      "preload-splash.js",
       "renderer/**/*",
       "automation/**/*",
       "vendor/**/*",
+      "assets/**/*",
       "node_modules/**/*",
       "!data/**/*",
       "!dist-installer/**/*",

@@ -60,11 +60,36 @@ function normalizeDob(raw) {
   return '';
 }
 
-function createWindow() {
+const ICON_PATH = path.join(__dirname, 'assets', 'icon.ico');
+
+function createSplash() {
+  const splash = new BrowserWindow({
+    width: 480,
+    height: 320,
+    frame: false,
+    transparent: false,
+    resizable: false,
+    center: true,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    icon: ICON_PATH,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload-splash.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  splash.loadFile(path.join(__dirname, 'renderer', 'splash.html'));
+  return splash;
+}
+
+function createMainWindow() {
   const win = new BrowserWindow({
     width: 1100,
     height: 760,
     title: '26AS AIS TIS Downloader',
+    show: false,             // hidden until splash finishes
+    icon: ICON_PATH,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -77,7 +102,24 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  const win = createWindow();
+  const splash = createSplash();
+  const win    = createMainWindow();
+
+  // When the splash signals it's done, close splash → show main.
+  const { ipcMain: _ipc } = require('electron');
+  _ipc.once('splash:done', () => {
+    splash.close();
+    win.show();
+    win.focus();
+  });
+
+  // Safety fallback — show main after 4s even if splash IPC never fires.
+  setTimeout(() => {
+    if (!win.isDestroyed() && !win.isVisible()) {
+      splash.destroy();
+      win.show();
+    }
+  }, 4000);
 
   ipcMain.handle('assessees:list', () => loadAssessees());
 
@@ -184,7 +226,10 @@ app.whenReady().then(() => {
   ipcMain.handle('shell:openPath', (_e, p) => shell.openPath(p));
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) {
+      const w = createMainWindow();
+      w.show();
+    }
   });
 });
 
