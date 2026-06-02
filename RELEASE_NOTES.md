@@ -1,3 +1,10 @@
+## v1.0.1 — Bug Fix
+
+### 🐛 Fixed
+- **AIS / TIS download failing on first-time use** — The AIS portal shows an instructions/onboarding page on new devices. The app now automatically clicks through intermediate pages (Proceed / Continue / Get Started) before reaching the download button. Users who previously worked fine are unaffected.
+
+---
+
 ## v1.0.0 — Initial Release
 
 ### ✅ What's included
@@ -12,7 +19,7 @@
 - Developed by **CA Akshay Daiya**, M/s Daiya Tiwari & Soni, Bikaner
 
 ### 📥 How to install
-1. Download `26AS-AIS-TIS-Downloader-Setup-1.0.0.exe` below
+1. Download `26AS-AIS-TIS-Downloader-Setup-1.0.1.exe` below
 2. Run the installer — choose your install folder, create shortcuts
 3. Launch from **Start Menu** or **Desktop shortcut**
 4. Click **+ Add Assessee**, enter Name / PAN / DOB / IT portal password
@@ -23,9 +30,3 @@
 - Windows 10 / 11 (64-bit)
 - Active internet connection
 - Google Chrome installed (used for portal automation)
-
-### 🔓 PDF Passwords
-PDFs are auto-unlocked if DOB is filled in the assessee form.
-If unlock fails, manual passwords are:
-- **26AS**: DOB in DDMMYYYY format
-- **AIS / TIS**: PAN (lowercase) + DOB in DDMMYYYY format

@@ -223,25 +223,41 @@ async function downloadAll({ assessee, which, downloadsDir, onLog }) {
         ]);
         const tab = aisPage || page;
 
-        // Skip waitForLoadState('domcontentloaded') — the Promise.race below
-        // resolves as soon as either the disclaimer Proceed OR the final
-        // Download AIS/TIS button is visible, which is the actual gate.
-        await Promise.race([
-          tab.locator('button', { hasText: /Download AIS\/TIS/i }).first()
-            .waitFor({ state: 'visible', timeout: 8000 }),
-          tab.locator('button', { hasText: /proceed|accept|continue|i agree/i }).first()
-            .waitFor({ state: 'visible', timeout: 8000 }),
-        ]).catch(() => {});
+        // Wait for the Angular SPA to fully hydrate — the AIS portal now shows
+        // an /instructions page first before the download landing page.
+        await tab.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+        await tab.waitForTimeout(2000);
         log('AIS tab URL: ' + tab.url());
 
-        // AIS portal disclaimer / Proceed
-        const proceed = tab.locator('button', { hasText: /proceed|accept|continue|i agree/i }).first();
-        if (await proceed.isVisible().catch(() => false)) {
-          log('  clicking AIS disclaimer Proceed');
-          await proceed.click().catch(() => {});
-          await tab.locator('button', { hasText: /Download AIS\/TIS/i }).first()
-            .waitFor({ state: 'visible', timeout: 8000 })
-            .catch(() => {});
+        // Navigate through any intermediate pages until we reach the download
+        // landing page. We allow up to 3 click-throughs (instructions → consent
+        // → landing).
+        for (let step = 0; step < 3; step++) {
+          const dlBtn = tab.locator('button', { hasText: /Download AIS\/TIS/i }).first();
+          if (await dlBtn.isVisible().catch(() => false)) break; // reached landing
+
+          // Dump what's on the page so we can debug if it still fails.
+          if (step === 0) {
+            log('  --- AIS portal intermediate page ---');
+            await dumpInputs(tab, log);
+          }
+
+          // Click any "Proceed", "Continue", "Get Started", "I Agree", or
+          // primary call-to-action button visible on the page.
+          const cta = tab.locator('button, a[role="button"]').filter({
+            hasText: /proceed|continue|get started|i agree|accept|next|ok/i,
+          }).first();
+
+          if (await cta.isVisible().catch(() => false)) {
+            const label = await cta.textContent().catch(() => '');
+            log(`  clicking CTA: "${label.trim().slice(0, 40)}"`);
+            await cta.click({ timeout: 10000 }).catch(() => {});
+            await tab.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+            await tab.waitForTimeout(1500);
+            log('  AIS URL after CTA: ' + tab.url());
+          } else {
+            break; // nothing to click — stop trying
+          }
         }
 
         if (which.includes('AIS')) {

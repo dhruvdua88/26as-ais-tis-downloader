@@ -1,6 +1,6 @@
 {
   "name": "26as-ais-tis-downloader",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "One-click 26AS, AIS and TIS downloader from the Indian Income Tax e-Filing portal. Built for Indian CA firms.",
   "main": "main.js",
   "scripts": {
