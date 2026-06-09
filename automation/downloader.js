@@ -6,6 +6,47 @@ const { unlockPdf } = require('./unlocker');
 const PORTAL_URL = 'https://www.incometax.gov.in/iec/foportal/';
 const LOGIN_URL  = 'https://eportal.incometax.gov.in/iec/foservices/#/login';
 
+// Click a locator, retrying with force on the usual interception failures.
+async function clickEl(loc, timeout = 12000) {
+  await loc.click({ timeout }).catch(async () => {
+    await loc.click({ force: true, timeout });
+  });
+}
+
+// Dump <select> options, text inputs, and any captcha/verification hint inside
+// a frame — dumpInputs() skips selects, which we need for TRACES AY pickers.
+async function dumpRich(frame, log, label = '') {
+  try {
+    const info = await frame.evaluate(() => {
+      const selects = [...document.querySelectorAll('select')].map((s) => ({
+        id: s.id || '', name: s.name || '',
+        options: [...s.options].map((o) => (o.text || '').trim()).filter(Boolean).slice(0, 30),
+        value: s.value,
+      }));
+      const inputs = [...document.querySelectorAll('input')].map((i) => ({
+        type: i.type || '', id: i.id || '', name: i.name || '',
+        value: (i.value || '').slice(0, 30), placeholder: i.placeholder || '',
+      }));
+      const body = (document.body && document.body.innerText) || '';
+      const captcha = /verification code|enter the (text|code|characters) (shown|below|above|in the image)/i.test(body)
+        || !!document.querySelector('img[src*="captcha" i]');
+      const imgs = [...document.querySelectorAll('img')]
+        .map((im) => im.getAttribute('src') || '').filter((s) => /captcha|code|digit/i.test(s)).slice(0, 5);
+      return { selects, inputs, captcha, imgs, snippet: body.replace(/\s+/g, ' ').slice(0, 300) };
+    });
+    log?.(`  --- dumpRich ${label} ---`);
+    log?.(`  captcha present? ${info.captcha}  captcha-imgs: ${JSON.stringify(info.imgs)}`);
+    log?.(`  selects: ${JSON.stringify(info.selects)}`);
+    log?.(`  inputs: ${JSON.stringify(info.inputs)}`);
+    log?.(`  text: ${info.snippet}`);
+    log?.(`  --- end dumpRich ${label} ---`);
+    return info;
+  } catch (e) {
+    log?.('  dumpRich failed: ' + e.message);
+    return null;
+  }
+}
+
 /**
  * Drive a headed Chromium session to download 26AS / AIS / TIS for one assessee.
  *
@@ -337,22 +378,88 @@ async function downloadAll({ assessee, which, downloadsDir, onLog }) {
 
         let tracesFrame = await findTracesFrame(tab, log);
 
-        // Click "View Tax Credit (Form 26AS/Annual Tax Statement)" hyperlink.
-        // It's an <a> tag — be specific so we don't grab paragraph text.
+        // Navigate to the AY-selection / Annual Tax Statement page. TRACES has
+        // TWO layouts depending on the taxpayer type:
+        //   • Individuals (view26AS.xhtml): a "View Tax Credit (Form 26AS/Annual
+        //     Tax Statement)" hyperlink.
+        //   • Companies / non-individuals (view26ASThrdPrty.xhtml): a
+        //     "View/ Verify Tax Credit" menu plus a "Proceed to View Annual Tax
+        //     Statement" submit button.
         const viewCreditLink = tracesFrame.getByRole('link', { name: /View Tax Credit.*Form 26AS/i })
-          .or(tracesFrame.locator('a', { hasText: /View Tax Credit/i }))
+          .or(tracesFrame.locator('a', { hasText: /View Tax Credit \(Form 26AS/i }))
           .first();
+        const proceedStmtSel =
+          'input[type="submit"][value*="Proceed to View" i], input[type="button"][value*="Proceed to View" i]';
+        const proceedStmtBtn = tracesFrame.locator(proceedStmtSel).first()
+          .or(tracesFrame.locator('a, button, input', { hasText: /Proceed to View Annual Tax Statement/i }).first());
+        const verifyMenu = tracesFrame.locator('a', { hasText: /View\/?\s*Verify Tax Credit/i }).first();
+
         if (await viewCreditLink.isVisible().catch(() => false)) {
-          log('  clicking "View Tax Credit (Form 26AS/Annual Tax Statement)"');
-          await viewCreditLink.click({ timeout: 10000 }).catch(async () => {
-            await viewCreditLink.click({ force: true, timeout: 10000 });
-          });
+          log('  individual flow: clicking "View Tax Credit (Form 26AS/Annual Tax Statement)"');
+          await clickEl(viewCreditLink);
           await tab.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
           await tab.waitForTimeout(2500);
           log('  TRACES URL after View Tax Credit: ' + tab.url());
           tracesFrame = await findTracesFrame(tab, log);
+        } else if (
+          (await proceedStmtBtn.isVisible().catch(() => false)) ||
+          (await verifyMenu.isVisible().catch(() => false))
+        ) {
+          log('  company flow: View/ Verify Tax Credit → Proceed to View Annual Tax Statement');
+
+          // The TDS-defaults interstitial loads its table asynchronously
+          // ("Loading…"). Clicking "Proceed to View Annual Tax Statement" BEFORE
+          // it settles expires the TRACES session (servfeatureexpiry.html). Wait
+          // for the page to finish loading first.
+          await tab.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+          for (let w = 0; w < 20; w++) {
+            const loading = await tracesFrame.evaluate(
+              () => /Loading\.\.\./i.test((document.body && document.body.innerText) || '')
+            ).catch(() => false);
+            if (!loading) break;
+            await tab.waitForTimeout(1000);
+          }
+          await tab.waitForTimeout(1500);
+          tracesFrame = await findTracesFrame(tab, log);
+
+          // Inspect the page BEFORE clicking — capture AY dropdown + any captcha.
+          const pre = await dumpRich(tracesFrame, log, 'company-26AS-landing');
+
+          // If a captcha is present, this view cannot be fully automated.
+          if (pre && pre.captcha) {
+            log('  CAPTCHA detected on company 26AS page — cannot auto-download; leaving for manual completion.');
+            throw new Error('Company 26AS (TRACES) requires a verification code/captcha — automatic download not possible. Open the TRACES tab and complete it manually, or download 26AS from the TRACES portal directly.');
+          }
+
+          // Select the latest Assessment Year if a dropdown exists (the Proceed
+          // button is a no-op until AY is chosen).
+          await tracesFrame.evaluate(() => {
+            const selects = [...document.querySelectorAll('select')];
+            const ay = selects.find((s) => [...s.options].some((o) => /\d{4}\s*-\s*\d{2}/.test(o.text || '')));
+            if (ay) {
+              const opts = [...ay.options].filter((o) => /\d{4}\s*-\s*\d{2}/.test(o.text || ''));
+              opts.sort((a, b) => parseInt((b.text.match(/\d{4}/) || [0])[0], 10) - parseInt((a.text.match(/\d{4}/) || [0])[0], 10));
+              if (opts[0]) { ay.value = opts[0].value; ay.dispatchEvent(new Event('change', { bubbles: true })); }
+            }
+          }).catch(() => {});
+          await tab.waitForTimeout(500);
+
+          const proceed2 = tracesFrame.locator(proceedStmtSel).first()
+            .or(tracesFrame.locator('a, button, input', { hasText: /Proceed to View Annual Tax Statement/i }).first());
+          if (await proceed2.isVisible().catch(() => false)) {
+            log('  clicking "Proceed to View Annual Tax Statement" (once)');
+            await clickEl(proceed2);
+          } else {
+            log('  company "Proceed to View Annual Tax Statement" not visible — dumping');
+            await dumpInputs(tab, log);
+          }
+          await tab.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+          await tab.waitForTimeout(2500);
+          log('  TRACES URL after company Proceed: ' + tab.url());
+          tracesFrame = await findTracesFrame(tab, log);
+          await dumpRich(tracesFrame, log, 'company-26AS-after-proceed');
         } else {
-          log('  View Tax Credit link not visible — dumping TRACES tab');
+          log('  Neither individual link nor company Proceed button found — dumping TRACES tab');
           await dumpInputs(tab, log);
         }
 
@@ -365,9 +472,26 @@ async function downloadAll({ assessee, which, downloadsDir, onLog }) {
         //   1. Click "View / Download" — loads the 26AS HTML view in-page
         //   2. Click "Export as PDF"  — triggers the PDF download
 
-        // Set the form: Assessment Year (pick the most recent — first non-
-        // placeholder option), View As = HTML. Both buttons stay disabled
-        // until AY is picked.
+        // Set the form: Assessment Year (pick the most recent), View As = HTML.
+        // Prefer native selectOption — it fires the page's own onchange handlers,
+        // which the company (view26ASThrdPrty) layout REQUIRES to enable the
+        // "View / Download" button. The evaluate block below is a fallback.
+        const aySel = tracesFrame.locator('#AssessmentYearDropDown, select[name*="Assessment" i]').first();
+        if (await aySel.isVisible().catch(() => false)) {
+          const ayOpts = await aySel.locator('option').allTextContents().catch(() => []);
+          const ays = ayOpts.map((t) => t.trim()).filter((t) => /^\d{4}\s*-\s*\d{2}$/.test(t))
+            .sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
+          if (ays[0]) {
+            await aySel.selectOption({ label: ays[0] }).catch(() => {});
+            log(`  selectOption AY = ${ays[0]}`);
+          }
+        }
+        const vtSel = tracesFrame.locator('#viewType, select[name="viewType"]').first();
+        if (await vtSel.isVisible().catch(() => false)) {
+          await vtSel.selectOption({ label: 'HTML' }).catch(() => {});
+        }
+        await tab.waitForTimeout(800);
+
         const formState = await tracesFrame.evaluate(() => {
           const selects = [...document.querySelectorAll('select')];
 
@@ -414,13 +538,19 @@ async function downloadAll({ assessee, which, downloadsDir, onLog }) {
 
         // Step 1: click "View / Download" to render the HTML view.
         log('  clicking "View / Download"');
-        const viewDlBtn = tracesFrame.locator(
-          'input[type="button"][value*="View" i][value*="Download" i], ' +
-          'input[type="submit"][value*="View" i][value*="Download" i]'
-        ).first()
+        const viewDlBtn = tracesFrame.locator('#btnSubmit').first()
+          .or(tracesFrame.locator(
+            'input[type="button"][value*="View" i][value*="Download" i], ' +
+            'input[type="submit"][value*="View" i][value*="Download" i]'
+          ).first())
           .or(tracesFrame.getByRole('button', { name: /View ?\/ ?Download/i }))
           .or(tracesFrame.locator('a, button, input', { hasText: /View ?\/ ?Download/i }).first());
 
+        // "View / Download" may render the statement in-place (individuals) OR
+        // open it in a NEW WINDOW (company / third-party view). Listen for a
+        // popup before clicking so we can follow it.
+        const popupPromise = context.waitForEvent('page', { timeout: 8000 });
+        popupPromise.catch(() => {});
         if (await viewDlBtn.isVisible().catch(() => false)) {
           await viewDlBtn.click({ timeout: 15000 }).catch(async () => {
             await viewDlBtn.click({ force: true, timeout: 15000 });
@@ -430,35 +560,60 @@ async function downloadAll({ assessee, which, downloadsDir, onLog }) {
           await dumpInputs(tab, log);
         }
 
+        // If a popup opened with the rendered statement, switch to it.
+        const popup = await popupPromise.catch(() => null);
+        let pdfTab = tab;
+        if (popup) {
+          log('  View/Download opened a new window — switching to it');
+          await popup.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+          await popup.bringToFront().catch(() => {});
+          pdfTab = popup;
+        }
+
         // Wait for the HTML 26AS view to render. The Export-as-PDF button is
         // disabled until then.
-        await tab.waitForLoadState('networkidle', { timeout: 60000 }).catch(() => {});
-        await tab.waitForTimeout(3000);
-        log('  TRACES URL after View/Download: ' + tab.url());
-        tracesFrame = await findTracesFrame(tab, log);
+        await pdfTab.waitForLoadState('networkidle', { timeout: 60000 }).catch(() => {});
+        await pdfTab.waitForTimeout(3000);
+        log('  URL after View/Download: ' + pdfTab.url());
+        const pdfFrame = await findTracesFrame(pdfTab, log);
 
         // Step 2: click "Export as PDF" — triggers the download.
         log('  clicking "Export as PDF"');
-        const pdfBtn = tracesFrame.locator(
-          'input[type="button"][value*="Export" i][value*="PDF" i], ' +
-          'input[type="submit"][value*="Export" i][value*="PDF" i]'
-        ).first()
-          .or(tracesFrame.getByRole('button', { name: /Export as PDF/i }))
-          .or(tracesFrame.locator('a, button, input', { hasText: /export.*pdf/i }).first());
+        const pdfBtn = pdfFrame.locator('#pdfBtn').first()
+          .or(pdfFrame.locator(
+            'input[type="button"][value*="Export" i][value*="PDF" i], ' +
+            'input[type="submit"][value*="Export" i][value*="PDF" i]'
+          ).first())
+          .or(pdfFrame.getByRole('button', { name: /Export as PDF/i }))
+          .or(pdfFrame.locator('a, button, input', { hasText: /export.*pdf/i }).first());
 
-        const dl = await Promise.all([
-          tab.waitForEvent('download', { timeout: 90000 }),
-          pdfBtn.click({ timeout: 15000 }).catch(async () => {
-            await pdfBtn.click({ force: true, timeout: 15000 });
-          }),
+        // The download may surface on the popup OR the original tab — listen on both.
+        const dlEvent = Promise.race([
+          pdfTab.waitForEvent('download', { timeout: 90000 }),
+          tab.waitForEvent('download', { timeout: 90000 }).catch(() => new Promise(() => {})),
         ]);
+        if (await pdfBtn.isVisible().catch(() => false)) {
+          await pdfBtn.click({ timeout: 15000 }).catch(async () => {
+            await pdfBtn.click({ force: true, timeout: 15000 });
+          });
+        } else {
+          log('  "Export as PDF" not found on the rendered view — dumping');
+          await dumpInputs(pdfTab, log);
+        }
+        const download = await dlEvent;
         const file = path.join(downloadsDir, `${assessee.pan}_26AS_${stamp}.pdf`);
-        await dl[0].saveAs(file);
+        await download.saveAs(file);
         saved.push(file);
         log(`Saved ${file}`);
         await unlockPdf(file, { pan: assessee.pan, dob: assessee.dob, log });
       } catch (e) {
         log('26AS flow failed: ' + e.message);
+        if (/download.*Timeout|Timeout.*download/i.test(e.message)) {
+          log('  NOTE: For company / non-individual PANs, the TRACES "Annual Tax');
+          log('  Statement" page is open with the Assessment Year pre-selected.');
+          log('  Click "View / Download" then "Export as PDF" in that tab to finish');
+          log('  manually — or download 26AS directly from the TRACES portal.');
+        }
         failed.push('26AS');
         // Dump the TRACES tab if we ever captured one, otherwise the IT portal.
         const tracesTab = context.pages().find((p) => /traces|tdscpc/i.test(p.url()));
@@ -1004,7 +1159,11 @@ async function downloadFromAisTisModal(tab, kind, pan, downloadsDir, stamp, save
     log('  AIS/TIS modal already open');
   }
 
-  const startedDownload = tab.waitForEvent('download', { timeout: 60000 });
+  // TIS serves inline (give it the full 60s). AIS PDF is usually generated
+  // asynchronously and delivered via Activity History, so only briefly wait for
+  // an inline download before falling back.
+  const inlineTimeout = kind === 'AIS' ? 12000 : 60000;
+  const startedDownload = tab.waitForEvent('download', { timeout: inlineTimeout });
   startedDownload.catch(() => {});
 
   const button = row.getByRole('button', { name: /download/i }).first();
@@ -1026,13 +1185,104 @@ async function downloadFromAisTisModal(tab, kind, pan, downloadsDir, stamp, save
     });
   }
 
-  const download = await startedDownload;
+  let download = null;
+  try {
+    download = await startedDownload;
+  } catch (e) {
+    // No inline download. For AIS this is expected — fetch it from Activity
+    // History (the portal queues the PDF for generation). For TIS, re-throw.
+    if (kind === 'AIS') {
+      log(`  no inline AIS download — falling back to Activity History`);
+      const okFallback = await downloadFromActivityHistory(
+        tab, kind, pan, downloadsDir, stamp, saved, log, assessee,
+      );
+      await closeAisTisModalIfOpen(tab, log);
+      if (!okFallback) {
+        throw new Error('AIS did not download inline and was not retrievable from Activity History (it may still be generating — try again in a few minutes).');
+      }
+      return;
+    }
+    throw e;
+  }
+
   const file = path.join(downloadsDir, `${pan}_${kind}_${stamp}.pdf`);
   await download.saveAs(file);
   saved.push(file);
   log(`Saved ${file}`);
   if (assessee) await unlockPdf(file, { pan: assessee.pan, dob: assessee.dob, log });
   await closeAisTisModalIfOpen(tab, log);
+}
+
+/**
+ * Fetch a document (typically AIS) from the AIS portal's "Activity History"
+ * page, where asynchronously-generated PDFs are delivered. Polls until the row
+ * for `kind` exposes a Download control, then downloads + unlocks it.
+ *
+ * The portal markup here isn't fully known across account types, so this logs
+ * rich diagnostics and tries several selector shapes. Returns true on success.
+ */
+async function downloadFromActivityHistory(tab, kind, pan, downloadsDir, stamp, saved, log, assessee) {
+  log(`  opening Activity History to fetch ${kind}`);
+  await closeAisTisModalIfOpen(tab, log).catch(() => {});
+
+  // Reach Activity History via the on-page button/link, else by direct URL.
+  const goBtn = tab.locator('button, a', { hasText: /Go To Activity History/i }).first()
+    .or(tab.locator('a', { hasText: /Activity History/i }).first());
+  if (await goBtn.isVisible().catch(() => false)) {
+    await clickEl(goBtn).catch(() => {});
+  } else {
+    await tab.goto('https://ais.insight.gov.in/complianceportal/ais/activityHistory',
+      { waitUntil: 'domcontentloaded' }).catch(() => {});
+  }
+  await tab.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+  await tab.waitForTimeout(2500);
+  log('  Activity History URL: ' + tab.url());
+  log('  --- Activity History diagnostics ---');
+  await dumpInputs(tab, log);
+
+  const docPat = kind === 'AIS'
+    ? /Annual Information Statement|\bAIS\b/i
+    : /Taxpayer Information Summary|\bTIS\b/i;
+
+  // Generation can take a while; poll for a downloadable row.
+  const deadline = Date.now() + 3 * 60 * 1000;
+  let attempt = 0;
+  while (Date.now() < deadline) {
+    attempt++;
+    const row = tab.locator('tr, li, .row, [class*="card"], [class*="list"]')
+      .filter({ hasText: docPat })
+      .filter({ hasText: /pdf/i })
+      .filter({ has: tab.locator('a, button', { hasText: /download/i }) })
+      .first();
+
+    if (await row.isVisible().catch(() => false)) {
+      const dlCtl = row.locator('a, button', { hasText: /download/i }).first();
+      const started = tab.waitForEvent('download', { timeout: 30000 });
+      started.catch(() => {});
+      log(`  Activity History: clicking ${kind} Download (attempt ${attempt})`);
+      await clickEl(dlCtl).catch(() => {});
+      await tab.waitForTimeout(500);
+      const ok = tab.getByRole('button', { name: /^ok$/i }).first();
+      if (await ok.isVisible().catch(() => false)) await clickEl(ok).catch(() => {});
+      const dl = await started.catch(() => null);
+      if (dl) {
+        const file = path.join(downloadsDir, `${pan}_${kind}_${stamp}.pdf`);
+        await dl.saveAs(file);
+        saved.push(file);
+        log(`Saved ${file} (via Activity History)`);
+        if (assessee) await unlockPdf(file, { pan: assessee.pan, dob: assessee.dob, log });
+        return true;
+      }
+    }
+
+    log(`  ${kind} not yet downloadable in Activity History (attempt ${attempt}); waiting 15s…`);
+    await tab.waitForTimeout(15000);
+    await tab.reload().catch(() => {});
+    await tab.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+    await tab.waitForTimeout(1500);
+  }
+  log(`  gave up waiting for ${kind} in Activity History.`);
+  return false;
 }
 
 /**
@@ -1120,7 +1370,13 @@ async function tickTracesAgreeAndProceed(page, log) {
     proceedClicked = true;
   }
   if (!proceedClicked) {
-    const proceedInput = frame.locator('input[type="button"][value*="Proceed" i], input[type="submit"][value*="Proceed" i]').first();
+    // Match the welcome-modal "Proceed" only — NOT the company page's
+    // "Proceed to View Annual Tax Statement" (that is handled separately, and
+    // clicking it here with no AY selected kills the TRACES session).
+    const proceedInput = frame.locator(
+      'input[type="button"][value*="Proceed" i]:not([value*="Annual" i]):not([value*="View" i]), ' +
+      'input[type="submit"][value*="Proceed" i]:not([value*="Annual" i]):not([value*="View" i])'
+    ).first();
     if (await proceedInput.isVisible().catch(() => false)) {
       log?.('  TRACES: clicking Proceed input');
       await proceedInput.click({ timeout: 10000 }).catch(() => {});

@@ -5,6 +5,7 @@ const logEl = $('#log');
 
 let editingId = null;
 let downloadingId = null;
+let batchMode = false;
 
 function logLine(msg) {
   const ts = new Date().toLocaleTimeString();
@@ -103,12 +104,51 @@ async function saveModal() {
 }
 
 function openDownloadModal(a) {
+  batchMode = false;
   downloadingId = a.id;
   $('#dl-name').textContent = a.name || a.pan;
   $('#opt-26as').checked = true;
   $('#opt-ais').checked = true;
   $('#opt-tis').checked = true;
   $('#dl-modal').hidden = false;
+}
+
+async function openBatchModal() {
+  const list = await window.api.list();
+  if (!list.length) { alert('Add or import at least one assessee first.'); return; }
+  batchMode = true;
+  downloadingId = null;
+  $('#dl-name').textContent = `ALL ${list.length} assessee(s)`;
+  $('#opt-26as').checked = true;
+  $('#opt-ais').checked = true;
+  $('#opt-tis').checked = true;
+  $('#dl-modal').hidden = false;
+}
+
+function setProgress(done, total) {
+  const wrap = $('#progress-wrap');
+  if (total <= 0) { wrap.hidden = true; return; }
+  wrap.hidden = false;
+  const pct = Math.round((done / total) * 100);
+  $('#progress-bar').style.width = pct + '%';
+  $('#progress-text').textContent = `${done} / ${total} done`;
+}
+
+async function importExcel() {
+  logLine('Opening file picker for Excel/CSV import…');
+  const r = await window.api.importExcel();
+  if (r.canceled) { logLine('Import cancelled.'); return; }
+  if (r.error) { alert(r.error); logLine('Import failed: ' + r.error); return; }
+  logLine(`Import: ${r.added} added, ${r.skipped} duplicate(s) skipped, ${r.invalid} invalid PAN(s) of ${r.total} row(s).`);
+  if (r.invalid && r.invalidRows?.length) logLine('  Invalid PANs: ' + r.invalidRows.join(', '));
+  refresh();
+}
+
+async function downloadTemplate() {
+  const r = await window.api.downloadTemplate();
+  if (r.canceled) return;
+  if (r.error) { alert(r.error); return; }
+  logLine('Template saved: ' + r.path);
 }
 
 function closeDownloadModal() {
@@ -131,13 +171,33 @@ async function startDownload(zip = false) {
     return;
   }
   const id = downloadingId;
+  const isBatch = batchMode;
   closeDownloadModal();
-  logLine(`Starting download for ${which.join(', ')}${zip ? ' (ZIP)' : ''}…`);
+  setBusy(true);
+  logLine(`Starting ${isBatch ? 'BATCH ' : ''}download for ${which.join(', ')}${zip ? ' (ZIP)' : ''}…`);
   try {
-    const result = await window.api.download({ id, which, zip });
-    logLine('Done. ' + (zip ? 'ZIP: ' : 'Files: ') + JSON.stringify(result));
+    if (isBatch) {
+      const r = await window.api.downloadBatch({ which, zip });
+      const ok = r.summary.filter(s => !s.error && s.files > 0).length;
+      logLine(`Batch complete — ${ok}/${r.summary.length} succeeded. Folder: ${r.runDir}`);
+      for (const s of r.summary) {
+        logLine(`   ${s.pan}: ${s.error ? 'FAILED — ' + s.error : s.files + ' file(s)'}`);
+      }
+    } else {
+      const result = await window.api.download({ id, which, zip });
+      logLine('Done. ' + (zip ? 'ZIP: ' : 'Files: ') + JSON.stringify(result));
+    }
   } catch (e) {
     logLine('ERROR: ' + (e.message || e));
+  } finally {
+    setBusy(false);
+    setProgress(0, 0);
+  }
+}
+
+function setBusy(busy) {
+  for (const sel of ['#btn-add', '#btn-import', '#btn-template', '#btn-download-all']) {
+    const el = $(sel); if (el) el.disabled = busy;
   }
 }
 
@@ -145,6 +205,9 @@ document.addEventListener('click', async (e) => {
   const t = e.target;
   // Assessee CRUD
   if (t.id === 'btn-add') openModal();
+  else if (t.id === 'btn-import') importExcel();
+  else if (t.id === 'btn-template') downloadTemplate();
+  else if (t.id === 'btn-download-all') openBatchModal();
   else if (t.id === 'm-cancel') closeModal();
   else if (t.id === 'm-save') saveModal();
   // Download modal
@@ -171,5 +234,6 @@ document.addEventListener('click', async (e) => {
 });
 
 window.api.onLog(({ msg }) => logLine(msg));
+window.api.onProgress(({ done, total }) => setProgress(done, total));
 
 refresh();

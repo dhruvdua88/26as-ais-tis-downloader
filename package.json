@@ -1,13 +1,16 @@
 {
   "name": "26as-ais-tis-downloader",
-  "version": "1.0.1",
-  "description": "One-click 26AS, AIS and TIS downloader from the Indian Income Tax e-Filing portal. Built for Indian CA firms.",
+  "version": "2.0.0",
+  "description": "One-click 26AS, AIS and TIS downloader from the Indian Income Tax e-Filing portal. Built for Indian CA firms. Cross-platform (Windows + macOS), bulk Excel import, timestamped per-PAN output.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "postinstall": "playwright install chromium",
     "dist:prep": "node scripts/prebuild.js",
-    "dist": "npm run dist:prep && electron-builder --win nsis --x64"
+    "dist": "npm run dist:prep && electron-builder --win nsis --x64",
+    "dist:win": "npm run dist:prep && electron-builder --win nsis --x64",
+    "dist:mac": "npm run dist:prep && electron-builder --mac dmg zip",
+    "dist:all": "npm run dist:prep && electron-builder -mw"
   },
   "author": {
     "name": "CA Akshay Daiya",
@@ -35,7 +38,8 @@
     "png-to-ico": "^3.0.1"
   },
   "dependencies": {
-    "playwright": "^1.47.0"
+    "playwright": "^1.47.0",
+    "xlsx": "^0.18.5"
   },
   "build": {
     "appId": "com.akshaydaiya.26as-ais-tis-downloader",
@@ -59,16 +63,45 @@
       "!dist-installer/**/*",
       "!.tmp.driveupload/**/*",
       "!**/*.md",
-      "!vendor/qpdf/bin/README.txt"
+      "!vendor/qpdf/bin/README.txt",
+      "!node_modules/playwright-core/.local-browsers/**/*"
     ],
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon-mac.png",
+      "category": "public.app-category.finance",
+      "artifactName": "26AS-AIS-TIS-Downloader-${version}-${arch}.${ext}",
+      "identity": null
+    },
+    "dmg": {
+      "title": "26AS AIS TIS Downloader",
+      "artifactName": "26AS-AIS-TIS-Downloader-${version}-${arch}.dmg"
     },
     "nsis": {
       "oneClick": false,
