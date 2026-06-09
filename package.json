@@ -63,7 +63,8 @@
       "!dist-installer/**/*",
       "!.tmp.driveupload/**/*",
       "!**/*.md",
-      "!vendor/qpdf/bin/README.txt"
+      "!vendor/qpdf/bin/README.txt",
+      "!node_modules/playwright-core/.local-browsers/**/*"
     ],
     "win": {
       "target": [
@@ -93,7 +94,7 @@
           ]
         }
       ],
-      "icon": "assets/icon.png",
+      "icon": "assets/icon-mac.png",
       "category": "public.app-category.finance",
       "artifactName": "26AS-AIS-TIS-Downloader-${version}-${arch}.${ext}",
       "identity": null
