@@ -15,7 +15,16 @@
     <section class="panel">
       <div class="panel-header">
         <h2>Assessees</h2>
-        <button id="btn-add" class="primary">+ Add Assessee</button>
+        <div class="header-btns">
+          <button id="btn-template" class="ghost" title="Download a blank Excel template to fill in">📄 Excel Template</button>
+          <button id="btn-import" class="ghost" title="Bulk-add assessees from an Excel/CSV file">📥 Import from Excel</button>
+          <button id="btn-add" class="primary">+ Add Assessee</button>
+          <button id="btn-download-all" class="accent" title="Download documents for every assessee in the list">⬇ Download ALL</button>
+        </div>
+      </div>
+      <div id="progress-wrap" hidden>
+        <div class="progress-track"><div id="progress-bar"></div></div>
+        <span id="progress-text"></span>
       </div>
       <table id="assessee-table">
         <thead>

@@ -22,7 +22,8 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const BUNDLED = path.join(__dirname, '..', 'vendor', 'qpdf', 'bin', 'qpdf.exe');
+const BUNDLED_DIR = path.join(__dirname, '..', 'vendor', 'qpdf', 'bin');
+const BUNDLED = path.join(BUNDLED_DIR, process.platform === 'win32' ? 'qpdf.exe' : 'qpdf');
 
 /**
  * Build the list of password candidates to try.
@@ -104,7 +105,10 @@ async function unlockPdf(file, { pan, dob, log } = {}) {
   // Probe first — if file isn't encrypted, nothing to do.
   const probe = await inspect(qpdfPath, file);
   if (probe.qpdfMissing) {
-    log?.(`  qpdf not found — leaving ${path.basename(file)} encrypted. Install qpdf from https://github.com/qpdf/qpdf/releases or put qpdf.exe at vendor/qpdf/bin/qpdf.exe.`);
+    const hint = process.platform === 'win32'
+      ? 'Install qpdf from https://github.com/qpdf/qpdf/releases or put qpdf.exe at vendor/qpdf/bin/qpdf.exe.'
+      : 'Install qpdf via `brew install qpdf` (macOS) or `apt install qpdf` (Linux).';
+    log?.(`  qpdf not found — leaving ${path.basename(file)} encrypted. ${hint}`);
     return { unlocked: false, reason: 'qpdf-missing' };
   }
   if (!probe.encrypted) {
