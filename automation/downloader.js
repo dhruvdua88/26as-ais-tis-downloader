@@ -406,6 +406,22 @@ async function downloadAll({ assessee, which, downloadsDir, onLog }) {
           (await verifyMenu.isVisible().catch(() => false))
         ) {
           log('  company flow: View/ Verify Tax Credit → Proceed to View Annual Tax Statement');
+
+          // The TDS-defaults interstitial loads its table asynchronously
+          // ("Loading…"). Clicking "Proceed to View Annual Tax Statement" BEFORE
+          // it settles expires the TRACES session (servfeatureexpiry.html). Wait
+          // for the page to finish loading first.
+          await tab.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+          for (let w = 0; w < 20; w++) {
+            const loading = await tracesFrame.evaluate(
+              () => /Loading\.\.\./i.test((document.body && document.body.innerText) || '')
+            ).catch(() => false);
+            if (!loading) break;
+            await tab.waitForTimeout(1000);
+          }
+          await tab.waitForTimeout(1500);
+          tracesFrame = await findTracesFrame(tab, log);
+
           // Inspect the page BEFORE clicking — capture AY dropdown + any captcha.
           const pre = await dumpRich(tracesFrame, log, 'company-26AS-landing');
 
