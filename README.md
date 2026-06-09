@@ -112,7 +112,8 @@ The folder opens automatically when the run finishes. PDFs are already password-
 | PDFs are still password-protected | Make sure the client's **DOB** is filled in. On macOS, install qpdf once: `brew install qpdf`. On Windows the bundled qpdf is used automatically. |
 | macOS: "app is damaged / can't be opened" | Right-click the app → **Open** → **Open**. If it persists, run `xattr -dr com.apple.quarantine "/Applications/26AS AIS TIS Downloader.app"`. |
 | Login fails | Re-check the PAN and password. The IT portal occasionally rate-limits — wait a minute and retry. |
-| **AIS download times out** | Known limitation: the portal sometimes generates the **AIS PDF asynchronously** (it appears later under *Activity History* on the portal) instead of downloading immediately. 26AS and TIS are unaffected. A fix that polls Activity History is planned. |
+| **AIS download times out** | The portal generates the **AIS PDF asynchronously** — it is not served inline. The app submits the request and tries to collect it from *Activity History*; if it isn't ready yet, open the AIS portal's **Activity History** a few minutes later and download it there. TIS is unaffected. |
+| **26AS for company / non-individual PANs** | Companies hit a different TRACES page (an "Annual Tax Statement" view, sometimes behind a TDS-defaults notice). The app navigates it and pre-selects the latest Assessment Year, but the final TRACES PDF export can need a manual click — if 26AS times out, the TRACES tab is left open: click **View / Download** then **Export as PDF** there. Individual PANs download 26AS fully automatically. |
 
 ---
 
